@@ -58,7 +58,7 @@ setup(
         "Flask",
         "Flask-Script",
         "strict-rfc3339",
-        "gunicorn"
+        "gunicorn",
     ],
     classifiers=[
         'Development Status :: 4 - Beta',

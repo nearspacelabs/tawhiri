@@ -37,6 +37,7 @@ import signal
 import operator
 from datetime import datetime
 import logging
+import yaml
 
 logger = logging.getLogger("tawhiri.dataset")
 
@@ -57,61 +58,11 @@ class Dataset(object):
         The forecast time of this dataset (:class:`datetime.datetime`).
 
     """
-
-    #: The dimensions of the dataset
-    #:
-    #: Note ``len(axes[i]) == shape[i]``.
-    shape = (65, 47, 3, 361, 720)
-
-    # TODO: use the other levels too?
-    # {10, 80, 100}m heightAboveGround (u, v)
-    #       -- note ground, not mean sea level - would need elevation
-    # 0 unknown "planetary boundry layer" (u, v) (first two records)
-    # 0 surface "Planetary boundary layer height"
-    # {1829, 2743, 3658} heightAboveSea (u, v)
-
-    #: The pressure levels contained in a "pgrb2f" file from the NOAA
-    pressures_pgrb2f = [10, 20, 30, 50, 70, 100, 150, 200, 250, 300, 350, 400,
-                        450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 925,
-                        950, 975, 1000]
-    #: The pressure levels contained in a "pgrb2bf" file from the NOAA
-    pressures_pgrb2bf = [1, 2, 3, 5, 7, 125, 175, 225, 275, 325, 375, 425,
-                         475, 525, 575, 625, 675, 725, 775, 825, 875]
-
     _axes_type = namedtuple("axes",
                 ("hour", "pressure", "variable", "latitude", "longitude"))
 
-    #: The values of the points on each axis: a 5-(named)tuple ``(hour,
-    #: pressure variable, latitude, longitude)``.
-    #:
-    #: For example, ``axes.pressure[4]`` is ``900`` - points in
-    #: cells ``dataset.array[a][4][b][c][d]`` correspond to data at 900mb.
-    axes = _axes_type(
-        range(0, 192 + 3, 3),
-        sorted(pressures_pgrb2f + pressures_pgrb2bf, reverse=True),
-        ["height", "wind_u", "wind_v"],
-        [x/2.0 for x in range(-180, 180 + 1)],
-        [x/2.0 for x in range(0, 720)]
-    )
-
     _listdir_type = namedtuple("dataset_in_row",
                 ("ds_time", "suffix", "filename", "path"))
-
-    assert shape == tuple(len(x) for x in axes)
-
-    #: The data type of dataset elements
-    element_type = 'float32'
-    #: The size in bytes of `element_type`
-    element_size = 4    # float32
-
-    #: The size in bytes of the entire dataset
-    size = element_size
-    for _x in shape:
-        size *= _x
-    del _x
-
-    #: The filename suffix for "grib mirror" files
-    SUFFIX_GRIBMIRROR = '.gribmirror'
 
     #: The default location of wind data
     DEFAULT_DIRECTORY = '/srv/tawhiri-datasets'
@@ -177,7 +128,7 @@ class Dataset(object):
         cls.cached_latest = None
 
     @classmethod
-    def open_latest(cls, directory=DEFAULT_DIRECTORY, persistent=False):
+    def open_latest(cls, config, directory=DEFAULT_DIRECTORY, persistent=False):
         """
         Find the most recent datset in `directory`, and open it
 
@@ -203,7 +154,7 @@ class Dataset(object):
 
             return cls.cached_latest
         else:
-            ds = Dataset(latest, directory=directory)
+            ds = Dataset(config, latest, directory=directory)
 
             if persistent:
                 # Start the countdown
@@ -213,10 +164,57 @@ class Dataset(object):
 
             return ds
 
-    def __init__(self, ds_time, directory=DEFAULT_DIRECTORY, new=False):
+    def load_config(self, config: str):
+        """
+        Parse the config file and set object properties
+        """
+        with open(config) as f:
+            cfg = yaml.load(f, Loader=yaml.SafeLoader)
+
+        hour_axis_vals = list(range(cfg['min_fcst_hr'], cfg['max_fcst_hr'] + cfg['fcst_step'], cfg['fcst_step']))
+        pressure_axis_vals = sorted(cfg['pressure_levels'], reverse=True)
+        variable_axis_vals = cfg['variables']
+        lat_axis_vals = [
+            cfg['min_lat'] + i * cfg['lat_res']
+            for i in range(int((cfg['max_lat'] - cfg['min_lat']) / cfg['lat_res']) + 1)
+        ]
+        lon_axis_vals = [
+            cfg['min_lon'] + i * cfg['lon_res']
+            for i in range(int((cfg['max_lon'] - cfg['min_lon']) / cfg['lon_res']) + 1)
+        ]
+        # If the longitude range spans the entire globe, drop the last longitude value since it's the same as the
+        # first longitude value
+        if cfg['max_lon'] - cfg['min_lon'] == 360:
+            lon_axis_vals = lon_axis_vals[:-1]
+
+        self.shape = [
+            len(hour_axis_vals),
+            len(pressure_axis_vals),
+            len(variable_axis_vals),
+            len(lat_axis_vals),
+            len(lon_axis_vals)
+        ]
+
+        self.axes = self._axes_type(
+            hour_axis_vals,
+            pressure_axis_vals,
+            variable_axis_vals,
+            lat_axis_vals,
+            lon_axis_vals
+        )
+
+        #: The size in bytes of the entire dataset
+        self.size = cfg['element_size']
+        for _x in self.shape:
+            self.size *= _x
+
+
+    def __init__(self, config, ds_time, directory=DEFAULT_DIRECTORY, new=False):
         """
         Open the dataset file for `ds_time`, in `directory`
 
+        :type config: string
+        :param config: configuration file for the dataset
         :type directory: string
         :param directory: directory containing the dataset
         :type ds_time: :class:`datetime.datetime`
@@ -227,6 +225,7 @@ class Dataset(object):
                     an existing dataset be opened?
         """
 
+        self.load_config(config)
         self.directory = directory
         self.ds_time = ds_time
         self.new = new

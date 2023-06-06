@@ -159,7 +159,6 @@ def parse_request(data):
     # Dataset
     req['dataset'] = _extract_parameter(data, "dataset", _rfc3339_to_timestamp,
                                         LATEST_DATASET_KEYWORD)
-
     return req
 
 
@@ -204,12 +203,15 @@ def run_prediction(req):
     # Find wind data location
     ds_dir = app.config.get('WIND_DATASET_DIR', WindDataset.DEFAULT_DIRECTORY)
 
+    # Hard-coding for now - TODO: figure out the best way to set this dynamically
+    config_file = 'configs/gfs0p5_config.yaml'
+
     # Dataset
     try:
         if req['dataset'] == LATEST_DATASET_KEYWORD:
-            tawhiri_ds = WindDataset.open_latest(persistent=True, directory=ds_dir)
+            tawhiri_ds = WindDataset.open_latest(config_file, persistent=True, directory=ds_dir)
         else:
-            tawhiri_ds = WindDataset(datetime.fromtimestamp(req['dataset']), directory=ds_dir)
+            tawhiri_ds = WindDataset(config_file, datetime.fromtimestamp(req['dataset']), directory=ds_dir)
     except IOError:
         raise InvalidDatasetException("No matching dataset found.")
     except ValueError as e:

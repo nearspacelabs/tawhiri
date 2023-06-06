@@ -5,5 +5,15 @@ Cython
 sphinx
 docutils
 
+# Dataset creator
+aiohttp
+cfgrib
+numpy
+pyyaml
+xarray
+
+# Ruaumoko (using the pip version causes issues with python > 3.7
+ruaumoko @ git+https://github.com/priyeshpatel/ruaumoko@dc489d9
+
 # Ourselves
 -e .

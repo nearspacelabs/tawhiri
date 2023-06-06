@@ -1,0 +1,22 @@
+# GFS 0.5 deg forecast dataset configuration
+
+min_fcst_hr: 0
+max_fcst_hr: 192
+fcst_step: 3
+
+pressure_levels: [1000, 975, 950, 925, 900, 875, 850, 825, 800, 775, 750, 725, 700, 675, 650, 625, 600,
+                   575, 550, 525, 500, 475, 450, 425, 400, 375, 350, 325, 300, 275, 250, 225, 200, 175,
+                   150, 125, 100, 70, 50, 30, 20, 10, 7, 5, 3, 2, 1]
+
+variables: ['gh', 'u', 'v']
+
+# grid definition
+min_lat: -90
+max_lat: 90
+min_lon: 0
+max_lon: 360
+lat_res: 0.5
+lon_res: 0.5
+
+#: The size in bytes of `element_type`
+element_size: 4    # float32

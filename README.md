@@ -26,10 +26,10 @@ general](http://www.cusf.co.uk/wiki/landing_predictor).
 
 ### Predictor
 
-…is written for Python 3, is compatible with Python 2, and needs Cython:
+…is written for Python 3 (max 3.8 due to magicmemoryview and ruaumoko requirements), is compatible with Python 2, and needs Cython:
 
 ```bash
-$ virtualenv venv
+$ virtualenv venv --python 3.7
 $ source venv/bin/activate
 $ pip install -r requirements.txt
 $ python setup.py build_ext --inplace
@@ -41,9 +41,13 @@ after modifying any `.pyx` files.
 
 ### Downloader
 
-The downloader was written before Python had good cooperative concurrency
+We use an internally developed python version of the downloader which produces identical output
+to the OCaml downloader. See `scripts/create_forecast_dataset.py`.
+
+The original downloader was written before Python had good cooperative concurrency
 support, and so is instead a [separate
 application](https://github.com/cuspaceflight/tawhiri-downloader) in OCaml.
+
 
 ## License
 

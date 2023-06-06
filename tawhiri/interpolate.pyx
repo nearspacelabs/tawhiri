@@ -79,16 +79,31 @@ def make_interpolator(dataset, WarningCounts warnings):
     if warnings is None:
         raise TypeError("Warnings must not be None")
 
-    data = MagicMemoryView(dataset.array, (65, 47, 3, 361, 720), b"f")
+    data = MagicMemoryView(dataset.array, dataset.shape, b"f")
+    min_hour = dataset.axes.hour[0]
+    hour_res = dataset.axes.hour[1] - dataset.axes.hour[0]
+    hour_axis_size = len(dataset.axes.hour)
+    min_lat = dataset.axes.latitude[0]
+    lat_res = dataset.axes.latitude[1] - dataset.axes.latitude[0]
+    lat_axis_size = len(dataset.axes.latitude)
+    min_lng = dataset.axes.longitude[0]
+    lng_res = dataset.axes.longitude[1] - dataset.axes.longitude[0]
+    lng_axis_size = len(dataset.axes.longitude)
 
     def f(hour, lat, lng, alt):
-        return get_wind(data, warnings, hour, lat, lng, alt)
+        return get_wind(data, warnings, hour, lat, lng, alt,
+                        min_hour, hour_res, hour_axis_size,
+                        min_lat, lat_res, lat_axis_size,
+                        min_lng, lng_res, lng_axis_size)
 
     return f
 
 
 cdef object get_wind(dataset ds, WarningCounts warnings,
-                     double hour, double lat, double lng, double alt):
+                     double hour, double lat, double lng, double alt,
+                     double min_hour, double hour_res, long hour_axis_size,
+                     double min_lat, double lat_res, long lat_axis_size,
+                     double min_lng, double lng_res, long lng_axis_size):
     """
     Return [u, v] wind components for the given position.
     Time is in fractional hours since the dataset starts.
@@ -104,7 +119,8 @@ cdef object get_wind(dataset ds, WarningCounts warnings,
     cdef long altidx
     cdef double lower, upper, u, v
 
-    pick3(hour, lat, lng, lerps)
+    pick3(hour, lat, lng, min_hour, hour_res, hour_axis_size,
+          min_lat, lat_res, lat_axis_size, min_lng, lng_res, lng_axis_size, lerps)
 
     altidx = search(ds, lerps, alt)
     lower = interp3(ds, lerps, VAR_A, altidx)
@@ -122,7 +138,7 @@ cdef object get_wind(dataset ds, WarningCounts warnings,
     u = interp4(ds, lerps, alt_lerp, VAR_U)
     v = interp4(ds, lerps, alt_lerp, VAR_V)
 
-    return u, v, 
+    return u, v
 
 cdef long pick(double left, double step, long n, double value,
                object variable_name, Lerp1[2] out) except -1:
@@ -140,7 +156,36 @@ cdef long pick(double left, double step, long n, double value,
     out[1] = Lerp1(b + 1, l)
     return 0
 
-cdef long pick3(double hour, double lat, double lng, Lerp3[8] out) except -1:
+cdef long pick3(double hour, double lat, double lng,
+                double min_hour, double hour_res, long hour_axis_size,
+                double min_lat, double lat_res, long lat_axis_size,
+                double min_lng, double lng_res, long lng_axis_size, Lerp3[8] out) except -1:
+    cdef Lerp1[2] lhour, llat, llng
+
+    pick(min_hour, hour_res, hour_axis_size, hour, "hour", lhour)
+    pick(min_lat, lat_res, lat_axis_size, lat, "lat", llat)
+    # The longitude could wrap around, so we tell `pick` that the
+    # longitude axis is one larger than it is for longitude axes covering the full 360 degrees
+    # (so that it can "choose" the 360 degrees point), then wrap it afterwards.
+    if lng_axis_size * lng_res == 360:
+        lng_axis_size += 1
+    pick(min_lng, lng_res, lng_axis_size, lng, "lng", llng)
+    if llng[1].index == lng_axis_size:
+        llng[1].index = 0
+
+    cdef long i = 0
+
+    for a in lhour:
+        for b in llat:
+            for c in llng:
+                p = a.lerp * b.lerp * c.lerp
+                out[i] = Lerp3(a.index, b.index, c.index, p)
+                i += 1
+
+    return 0
+
+
+cdef long pick3_orig(double hour, double lat, double lng, Lerp3[8] out) except -1:
     cdef Lerp1[2] lhour, llat, llng
 
     # the dimensions of the lat/lon axes are 361 and 720
