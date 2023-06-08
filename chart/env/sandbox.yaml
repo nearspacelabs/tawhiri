@@ -1,0 +1,2 @@
+gateways: ["public-rest-gateway"]
+hosts: ["sandbox.swiftera.co"]

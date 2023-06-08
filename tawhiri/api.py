@@ -19,10 +19,12 @@
 Provide the HTTP API for Tawhiri.
 """
 
-from flask import Flask, jsonify, request, g
-from datetime import datetime
-import time
+import os
 import strict_rfc3339
+import time
+from datetime import datetime
+from flask import Flask, jsonify, request, g
+from pathlib import Path
 
 from tawhiri import solver, models
 from tawhiri.dataset import Dataset as WindDataset
@@ -204,7 +206,7 @@ def run_prediction(req):
     ds_dir = app.config.get('WIND_DATASET_DIR', WindDataset.DEFAULT_DIRECTORY)
 
     # Hard-coding for now - TODO: figure out the best way to set this dynamically
-    config_file = 'configs/gfs0p5_config.yaml'
+    config_file = os.environ.get('FORECAST_CONFIG', str(Path(__file__).parent / 'configs' / 'gfs0p5_config.yaml'))
 
     # Dataset
     try:
